@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NextAI Architecture Diagrams</title>
+    
+    <!-- Tailwind for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Babel for JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <style>
+        body { background-color: #f8fafc; font-family: sans-serif; }
+        .loading { text-align: center; padding: 50px; color: #64748b; }
+    </style>
+</head>
+<body>
+    <div id="root">
+        <div class="loading">Loading diagram engine...</div>
+    </div>
+
+    <!-- Error Trap -->
+    <script>
+        window.onerror = function(message, source, lineno, colno, error) {
+            document.getElementById('root').innerHTML = `
+                <div style="color: red; padding: 20px; border: 1px solid red; background: #fff0f0; margin: 20px; font-family: monospace;">
+                    <h3 style="margin-top:0">Startup Error</h3>
+                    <p><strong>Message:</strong> ${message}</p>
+                    <p><strong>Source:</strong> ${source}</p>
+                    <p><strong>Line:</strong> ${lineno}</p>
+                </div>
+            `;
+        };
+    </script>
+
+    <script type="text/babel">
+        const { useState, useMemo } = React;
+
+        // --- 1. Icons ---
+        const Icon = ({ children, className }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                {children}
+            </svg>
+        );
+
+        const ArrowRight = ({ className }) => (
+            <Icon className={className}>
+                <path d="M5 12h14" />
+                <path d="m12 5 7 7-7 7" />
+            </Icon>
+        );
+
+        const ShieldAlert = ({ className }) => (
+            <Icon className={className}>
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10zM12 8v4M12 16h.01" />
+            </Icon>
+        );
+
+        const Server = ({ className }) => (
+            <Icon className={className}>
+                <rect width="20" height="8" x="2" y="2" rx="2" ry="2" />
+                <rect width="20" height="8" x="2" y="14" rx="2" ry="2" />
+                <line x1="6" x2="6.01" y1="6" y2="6" />
+                <line x1="6" x2="6.01" y1="18" y2="18" />
+            </Icon>
+        );
+
+        const User = ({ className }) => (
+            <Icon className={className}>
+                <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+                <circle cx="12" cy="7" r="4" />
+            </Icon>
+        );
+
+        const Cpu = ({ className }) => (
+            <Icon className={className}>
+                <rect x="4" y="4" width="16" height="16" rx="2" />
+                <rect x="9" y="9" width="6" height="6" />
+                <path d="M9 1v3" /><path d="M15 1v3" /><path d="M9 20v3" /><path d="M15 20v3" />
+                <path d="M20 9h3" /><path d="M20 14h3" /><path d="M1 9h3" /><path d="M1 14h3" />
+            </Icon>
+        );
+
+        const CodeIcon = ({ className }) => (
+            <Icon className={className}>
+                <polyline points="16 18 22 12 16 6" />
+                <polyline points="8 6 2 12 8 18" />
+            </Icon>
+        );
+
+        const Download = ({ className }) => (
+            <Icon className={className}>
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" x2="12" y1="15" y2="3" />
+            </Icon>
+        );
+
+        const Layers = ({ className }) => (
+            <Icon className={className}>
+                <polygon points="12 2 2 7 12 12 22 7 12 2" />
+                <polyline points="2 17 12 22 22 17" />
+                <polyline points="2 12 12 17 22 12" />
+            </Icon>
+        );
+
+        // --- 2. UI Components ---
+        const Card = ({ children }) => <div className="rounded-xl border bg-white text-slate-950 shadow shadow-slate-200/50">{children}</div>;
+        const CardContent = ({ children, className="" }) => <div className={`p-6 pt-0 ${className}`}>{children}</div>;
+        
+        const Badge = ({ children, variant = "default", className = "" }) => {
+            const styles = {
+                default: "bg-slate-900 text-white hover:bg-slate-800",
+                secondary: "bg-slate-100 text-slate-800 hover:bg-slate-200",
+                destructive: "bg-red-50 text-red-700 border border-red-200",
+                outline: "text-slate-700 border border-slate-300"
+            };
+            return (
+                <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold transition-colors ${styles[variant]} ${className}`}>
+                    {children}
+                </span>
+            );
+        };
+
+        const Button = ({ children, onClick, variant = "default", className="" }) => {
+            const base = "inline-flex items-center justify-center rounded-lg text-sm font-medium h-9 px-4 py-2 transition-all active:scale-95";
+            const styles = {
+                default: "bg-blue-600 text-white hover:bg-blue-700 shadow-sm",
+                outline: "border border-slate-300 bg-white hover:bg-slate-50 text-slate-700",
+                ghost: "hover:bg-slate-100 text-slate-700"
+            };
+            return <button onClick={onClick} className={`${base} ${styles[variant]} ${className}`}>{children}</button>;
+        };
+
+        const Select = ({ value, onChange, options }) => (
+            <div className="relative">
+                <select 
+                    value={value} 
+                    onChange={(e) => onChange(e.target.value)}
+                    className="h-10 w-full appearance-none rounded-md border border-slate-300 bg-white py-2 px-3 pr-8 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-slate-700 font-medium cursor-pointer hover:bg-slate-50"
+                >
+                    {options.map(opt => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                </select>
+                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-500">
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
+                </div>
+            </div>
+        );
+
+        // --- 3. Diagrams ---
+
+        const SequenceDiagram = ({ selectedEndpoint }) => {
+            
+            const diagrams = useMemo(() => ({
+                "forecast": [
+                    { from: "Client", to: "LP", label: "POST /liquidity-plan/{id}/load", type: "req" },
+                    { from: "LP", to: "Client", label: "202 Accepted", type: "res", dashed: true },
+                    { from: "Client", to: "LP", label: "GET .../user-tasks (Poll 5s)", type: "req", loop: true },
+                    { from: "LP", to: "NextAI", label: "POST /forecast/run/stream", type: "req" },
+                    { from: "NextAI", to: "LP", label: "SSE: 'Analyzing...'", type: "res", dashed: true },
+                    { from: "NextAI", to: "LLM", label: "Stage: Decomposition", type: "req" },
+                    { from: "LLM", to: "NextAI", label: "Stage: Strategy", type: "res", dashed: true },
+                    { from: "NextAI", to: "LLM", label: "Stage: Code Generation", type: "req" },
+                    { from: "LLM", to: "NextAI", label: "Generated Python script", type: "res", dashed: true },
+                    { from: "NextAI", to: "Runner", label: "Code Execution", type: "req" },
+                    { from: "Runner", to: "NextAI", label: "Forecast result", type: "res", dashed: true },
+                    { from: "NextAI", to: "LP", label: "SSE: Final Result", type: "res", dashed: true },
+                    { from: "LP", to: "Client", label: "Task Status: DONE", type: "res", dashed: true }
+                ],
+                "backtest": [
+                    { from: "Client", to: "LP", label: "POST /liquidity-plan/{id}/load", type: "req" },
+                    { from: "LP", to: "Client", label: "202 Accepted", type: "res", dashed: true },
+                    { from: "Client", to: "LP", label: "GET .../user-tasks (Poll)", type: "req", loop: true },
+                    { from: "LP", to: "NextAI", label: "POST /forecast/backtest", type: "req" },
+                    { from: "NextAI", to: "LP", label: "SSE: 'Backtesting...'", type: "res", dashed: true },
+                    { from: "NextAI", to: "Runner", label: "Exec: Rolling Origin", type: "req" },
+                    { from: "Runner", to: "NextAI", label: "Metrics (MAE)", type: "res", dashed: true },
+                    { from: "NextAI", to: "LLM", label: "Math/Stats/Code Analysis", type: "req" },
+                    { from: "LLM", to: "NextAI", label: "Analysis Report with refined prompt", type: "res", dashed: true },
+                    { from: "NextAI", to: "LP", label: "SSE: Final Analysis", type: "res", dashed: true },
+                    { from: "LP", to: "Client", label: "Task Status: DONE", type: "res", dashed: true }
+                ],
+                "prompt_refine": [
+                    { from: "Client", to: "LP", label: "POST /forecast/prompt-refine", type: "req" },
+                    { from: "LP", to: "NextAI", label: "POST /prompt/refine", type: "req" },
+                    { from: "NextAI", to: "LLM", label: "Refine System Prompt", type: "req" },
+                    { from: "LLM", to: "NextAI", label: "Optimized Prompt", type: "res", dashed: true },
+                    { from: "NextAI", to: "LP", label: "200 OK (JSON)", type: "res", dashed: true },
+                    { from: "LP", to: "Client", label: "200 OK", type: "res", dashed: true }
+                ],
+                "comment_code": [
+                    { from: "Client", to: "LP", label: "POST /forecast/comment-code", type: "req" },
+                    { from: "LP", to: "NextAI", label: "POST /forecast/comment-code", type: "req" },
+                    { from: "NextAI", to: "Database", label: "Fetch Script", type: "req" },
+                    { from: "NextAI", to: "LLM", label: "Prompt: Annotate Code", type: "req" },
+                    { from: "LLM", to: "NextAI", label: "Commented Code", type: "res", dashed: true },
+                    { from: "NextAI", to: "LP", label: "200 OK (Code)", type: "res", dashed: true },
+                    { from: "LP", to: "Client", label: "200 OK", type: "res", dashed: true }
+                ],
+                "cache_status": [
+                    { from: "Client", to: "LP", label: "GET /forecast/status/{id}", type: "req" },
+                    { from: "LP", to: "NextAI", label: "GET /forecast/status/{id}", type: "req" },
+                    { from: "NextAI", to: "Database", label: "Query Cache", type: "req" },
+                    { from: "Database", to: "NextAI", label: "Entry Found", type: "res", dashed: true },
+                    { from: "NextAI", to: "LP", label: "200 OK", type: "res", dashed: true },
+                    { from: "LP", to: "Client", label: "200 OK", type: "res", dashed: true }
+                ],
+                "cache_approve": [
+                    { from: "Client", to: "LP", label: "POST /forecast/approve", type: "req" },
+                    { from: "LP", to: "NextAI", label: "POST /forecast/approve", type: "req" },
+                    { from: "NextAI", to: "Database", label: "Update Status=Approved", type: "req" },
+                    { from: "NextAI", to: "LP", label: "200 OK", type: "res", dashed: true },
+                    { from: "LP", to: "Client", label: "200 OK", type: "res", dashed: true }
+                ],
+                "cache_disapprove": [
+                    { from: "Client", to: "LP", label: "POST /forecast/disapprove", type: "req" },
+                    { from: "LP", to: "NextAI", label: "POST /forecast/disapprove", type: "req" },
+                    { from: "NextAI", to: "Database", label: "Update Status=Rejected", type: "req" },
+                    { from: "NextAI", to: "LP", label: "200 OK", type: "res", dashed: true },
+                    { from: "LP", to: "Client", label: "200 OK", type: "res", dashed: true }
+                ]
+            }), []);
+
+            const currentSteps = diagrams[selectedEndpoint] || diagrams["forecast"];
+
+            return (
+                <div className="w-full p-2 bg-slate-50 rounded-lg border border-slate-200">
+                    <div className="w-full flex flex-col space-y-4 pb-2">
+                        {/* Grid Headers */}
+                        <div className="grid grid-cols-5 font-semibold text-xs text-slate-500 uppercase tracking-wider relative z-20">
+                            <div className="flex flex-col items-center gap-2 text-center">
+                                <div className="p-2 bg-white rounded shadow-sm border border-slate-100"><User className="w-5 h-5"/></div>
+                                Client
+                            </div>
+                            <div className="flex flex-col items-center gap-2 text-center">
+                                <div className="p-2 bg-white rounded shadow-sm border border-slate-100"><Layers className="w-5 h-5 text-blue-500"/></div>
+                                Liquidity<br/>Planning
+                            </div>
+                            <div className="flex flex-col items-center gap-2 text-center">
+                                <div className="p-2 bg-white rounded shadow-sm border border-slate-100"><Server className="w-5 h-5 text-emerald-500"/></div>
+                                Next AI<br/>Service
+                            </div>
+                            <div className="flex flex-col items-center gap-2 text-center">
+                                <div className="p-2 bg-white rounded shadow-sm border border-slate-100"><Cpu className="w-5 h-5 text-purple-500"/></div>
+                                LLM
+                            </div>
+                            <div className="flex flex-col items-center gap-2 text-center">
+                                <div className="p-2 bg-white rounded shadow-sm border border-slate-100"><CodeIcon className="w-5 h-5 text-orange-500"/></div>
+                                Runner/<br/>Local Storage
+                            </div>
+                        </div>
+                        
+                        {/* Diagram Body */}
+                        <div className="relative mt-2 min-h-[200px]">
+                            {/* Vertical Lifelines */}
+                            <div className="absolute inset-0 grid grid-cols-5 pointer-events-none">
+                                {[0,1,2,3,4].map(idx => (
+                                    <div key={idx} className="relative w-full h-full">
+                                        <div className="absolute left-1/2 -translate-x-1/2 w-px border-l border-dashed border-slate-300 h-full"></div>
+                                    </div>
+                                ))}
+                            </div>
+                            
+                            {/* Arrows */}
+                            <div className="relative z-10 flex flex-col space-y-6 pt-4 pb-4">
+                                {currentSteps.map((step, idx) => {
+                                    const positions = { "Client": 0, "LP": 1, "NextAI": 2, "LLM": 3, "Runner": 4, "Database": 4 };
+                                    const startIdx = positions[step.from];
+                                    const endIdx = positions[step.to];
+                                    
+                                    const startPercent = (startIdx * 20) + 10;
+                                    const endPercent = (endIdx * 20) + 10;
+                                    
+                                    const width = Math.abs(endPercent - startPercent);
+                                    const left = Math.min(startPercent, endPercent);
+                                    const isLeft = startPercent > endPercent;
+                                    
+                                    return (
+                                        <div key={idx} className="relative h-9 w-full group">
+                                            {step.loop && (
+                                                <div className="absolute top-0 bottom-[-15px] border-l-2 border-t-2 border-b-2 border-slate-200 rounded-l-lg bg-slate-100/30 text-[9px] text-slate-400 pl-1 pt-1"
+                                                     style={{ left: `${startPercent - 8}%`, width: '10%' }}>
+                                                    Loop
+                                                </div>
+                                            )}
+                                            <div 
+                                                className={`absolute top-1/2 -translate-y-1/2 h-px ${step.dashed ? 'border-t-2 border-dashed border-slate-300' : 'bg-slate-400'} flex items-center justify-center transition-all group-hover:bg-blue-400 group-hover:border-blue-400`}
+                                                style={{ left: `${left}%`, width: `${width}%` }}
+                                            >
+                                                <div className={`absolute -top-3 bg-white px-1.5 py-0.5 rounded border border-slate-200 text-[10px] font-medium text-slate-600 shadow-sm whitespace-nowrap z-10 ${step.loop ? 'border-blue-200 text-blue-600' : ''}`}>
+                                                    {step.label}
+                                                </div>
+                                                <ArrowRight className={`absolute w-3 h-3 text-slate-400 group-hover:text-blue-400 ${isLeft ? 'rotate-180 left-0 -ml-1.5' : 'right-0 -mr-1.5'}`} />
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const StateDiagram = () => (
+            <div className="flex flex-col items-center space-y-6 p-6 bg-slate-50 rounded-xl border border-slate-200">
+                <div className="flex items-center gap-4 animate-fade-in">
+                    <div className="w-3 h-3 rounded-full bg-slate-400 animate-pulse" />
+                    <ArrowRight className="w-4 h-4 text-slate-300" />
+                    <Badge variant="outline" className="bg-white px-3 py-1">Pending Request</Badge>
+                </div>
+                
+                <ArrowRight className="w-5 h-5 text-slate-300 rotate-90" />
+                
+                <div className="bg-white p-4 rounded-lg border-l-4 border-blue-500 shadow-sm w-full max-w-sm text-center">
+                    <h4 className="font-bold text-slate-800 mb-1">Planning Phase</h4>
+                    <p className="text-xs text-slate-500">Decomposition & Strategy Selection</p>
+                </div>
+                
+                <ArrowRight className="w-5 h-5 text-slate-300 rotate-90" />
+                
+                <div className="bg-white p-4 rounded-lg border-l-4 border-purple-500 shadow-sm w-full max-w-sm text-center">
+                    <h4 className="font-bold text-slate-800 mb-1">Code Generation</h4>
+                    <p className="text-xs text-slate-500">LLM writes Python script</p>
+                </div>
+                
+                <ArrowRight className="w-5 h-5 text-slate-300 rotate-90" />
+                
+                <div className="relative w-full max-w-sm">
+                    <div className="absolute -right-12 top-0 h-full w-10 border-r-2 border-dashed border-red-200 rounded-r-2xl flex items-center justify-center">
+                        <span className="rotate-90 text-[10px] text-red-400 font-bold uppercase tracking-widest whitespace-nowrap">Auto-Repair</span>
+                    </div>
+                    <div className="bg-white p-4 rounded-lg border-l-4 border-orange-500 shadow-sm text-center">
+                        <h4 className="font-bold text-slate-800 mb-2">Execution & Validation</h4>
+                        <div className="flex justify-center gap-2">
+                            <Badge variant="secondary">Syntax</Badge>
+                            <Badge variant="secondary">Security Scan</Badge>
+                            <Badge variant="secondary">Runtime</Badge>
+                        </div>
+                    </div>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-8 w-full max-w-sm pt-4">
+                    <div className="flex flex-col items-center">
+                        <ArrowRight className="w-5 h-5 text-slate-300 rotate-90 mb-2" />
+                        <Badge className="bg-emerald-600 hover:bg-emerald-700 px-4 py-1.5">Success</Badge>
+                    </div>
+                    <div className="flex flex-col items-center">
+                        <ArrowRight className="w-5 h-5 text-slate-300 rotate-90 mb-2" />
+                        <Badge variant="destructive" className="px-4 py-1.5">Fallback</Badge>
+                    </div>
+                </div>
+            </div>
+        );
+
+        const ThreatModel = () => {
+            const threats = [
+                { cat: "Spoofing", risk: "User impersonation", mit: "OAuth2 & Databricks OIDC (Client Credentials)" },
+                { cat: "Tampering", risk: "Unsafe Code Generation", mit: "CodeScanner (AST Analysis) & Policy Checks" },
+                { cat: "Repudiation", risk: "Denying execution steps", mit: "Provenance Sidecar (pandas hooks) & Immutable Usage Logs" },
+                { cat: "Info Disclosure", risk: "PII/Secrets Leaking", mit: "InputSanitizer & OutputValidator (Regex/Patterns)" },
+                { cat: "DoS", risk: "LLM Resource Exhaustion", mit: "TokenBucket RateLimiter (Input/Output TPM)" },
+                { cat: "Elevation", risk: "Remote Code Execution", mit: "Static Analysis (Blocked Imports: subprocess, os, socket)" }
+            ];
+            return (
+                <div className="grid gap-3 sm:grid-cols-2">
+                    {threats.map((t, i) => (
+                        <div key={i} className="group bg-white p-3 rounded-lg border border-slate-200 hover:border-slate-400 hover:shadow-md transition-all">
+                            <div className="flex items-center gap-2 mb-1">
+                                <ShieldAlert className="w-4 h-4 text-red-500 group-hover:scale-110 transition-transform" />
+                                <span className="font-bold text-slate-800 text-sm">{t.cat}</span>
+                            </div>
+                            <div className="space-y-1">
+                                <div className="text-xs text-slate-500">
+                                    <span className="font-semibold text-slate-700">Risk:</span> {t.risk}
+                                </div>
+                                <div className="text-xs text-emerald-600">
+                                    <span className="font-semibold">Fix:</span> {t.mit}
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            );
+        };
+
+        const App = () => {
+            const [tab, setTab] = useState("sequence");
+            const [endpoint, setEndpoint] = useState("forecast");
+
+            const endpointOptions = [
+                { value: "forecast", label: "Forecast Run (SSE)" },
+                { value: "backtest", label: "Backtest Run (SSE)" },
+                { value: "prompt_refine", label: "Prompt Refine" },
+                { value: "comment_code", label: "Comment Code" },
+                { value: "cache_status", label: "Cache Status" },
+                { value: "cache_approve", label: "Cache Approve" },
+                { value: "cache_disapprove", label: "Cache Disapprove" }
+            ];
+
+            const handleDownload = () => {
+                const md = `# NextAI Architecture\n\n- Sequence: Request Flow\n- Forecast Process: Lifecycle\n- STRIDE: Security Model`;
+                const blob = new Blob([md], { type: 'text/markdown' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'NextAI_Architecture.md';
+                a.click();
+            };
+
+            return (
+                <div className="max-w-5xl mx-auto py-6 px-4">
+                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+                        <div>
+                            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">NextAI Architecture</h1>
+                            <p className="text-slate-500 text-sm mt-0.5">System Design & Security Specification</p>
+                        </div>
+                        <Button variant="outline" onClick={handleDownload} className="h-8 text-xs">
+                            <span className="flex items-center gap-2"><Download className="w-3 h-3"/> Download MD</span>
+                        </Button>
+                    </div>
+
+                    <div className="mb-4 border-b border-slate-200">
+                        <div className="flex space-x-6">
+                            {['sequence', 'state', 'threat'].map(t => (
+                                <button
+                                    key={t}
+                                    onClick={() => setTab(t)}
+                                    className={`pb-2 text-sm font-medium border-b-2 transition-colors ${
+                                        tab === t 
+                                        ? 'border-blue-600 text-blue-600' 
+                                        : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                                    }`}
+                                >
+                                    {t === 'sequence' && 'Sequence Diagram'}
+                                    {t === 'state' && 'Forecast Process'}
+                                    {t === 'threat' && 'Threat Model'}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    <Card>
+                        <CardContent className="pt-4 pb-4">
+                            {tab === 'sequence' && (
+                                <div className="space-y-4">
+                                    <div className="flex items-center gap-4 bg-slate-50 p-3 rounded-lg border border-slate-100">
+                                        <div className="font-medium text-xs text-slate-700 whitespace-nowrap">Select Endpoint Flow:</div>
+                                        <div className="w-56">
+                                            <Select 
+                                                value={endpoint} 
+                                                onChange={setEndpoint} 
+                                                options={endpointOptions} 
+                                            />
+                                        </div>
+                                    </div>
+                                    <SequenceDiagram selectedEndpoint={endpoint} />
+                                </div>
+                            )}
+                            {tab === 'state' && <StateDiagram />}
+                            {tab === 'threat' && <ThreatModel />}
+                        </CardContent>
+                    </Card>
+                    
+                    <div className="mt-6 text-center text-[10px] text-slate-400">
+                        Generated for Architecture Review • Confidential
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
